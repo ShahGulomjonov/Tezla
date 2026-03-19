@@ -93,16 +93,25 @@ export default function StudioPage() {
         } catch (err) { alert('Xato: ' + err.message); }
     };
 
-    /* ---------- YTS Search & Import ---------- */
+    /* ---------- TMDB Search & Import ---------- */
     const handleYtsSearch = async (e) => {
         e.preventDefault();
         if (!ytsQuery) return;
         setIsSearching(true);
         try {
-            const res = await fetch(`${API_URL}/api/yts/search?q=${encodeURIComponent(ytsQuery)}`);
+            const res = await fetch(`${API_URL}/api/tmdb/search?q=${encodeURIComponent(ytsQuery)}`);
             if (!res.ok) throw new Error('Qidiruvda xatolik yuz berdi');
             const data = await res.json();
-            setYtsResults(data.results || []);
+            const movies = (data.results || []).filter(m => m.poster_path).map(m => ({
+                id: m.id,
+                title: m.title,
+                year: m.release_date ? m.release_date.substring(0, 4) : '—',
+                rating: m.vote_average?.toFixed(1) || '—',
+                poster: m.poster_url || `https://image.tmdb.org/t/p/w200${m.poster_path}`,
+                overview: m.overview || '',
+                tmdb_id: m.id
+            }));
+            setYtsResults(movies);
         } catch (err) {
             alert('Xato: ' + err.message);
         }
@@ -110,22 +119,9 @@ export default function StudioPage() {
     };
 
     const handleYtsImport = async (movie) => {
-        // Find best torrent (1080p -> 720p)
-        const torrent = movie.torrents?.find(t => t.quality === '1080p') || movie.torrents?.[0];
-        if (!torrent) {
-            return alert("Fayl topilmadi!");
-        }
-        
         try {
-            const res = await fetch(`${API_URL}/api/yts/download`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: movie.title,
-                    torrent_url: torrent.url
-                })
-            });
-            if (!res.ok) throw new Error("Yuklash boshlanmadi");
+            const res = await fetch(`${API_URL}/api/tmdb/import/${movie.tmdb_id}`, { method: 'POST' });
+            if (!res.ok) throw new Error("Import boshlanmadi");
             setYtsResults([]);
             setYtsQuery('');
             setActiveTab('local');
@@ -162,7 +158,7 @@ export default function StudioPage() {
             {/* Upload / YTS Tabs */}
             <div className="studio-tabs">
                 <button className={`studio-tab ${activeTab === 'local' ? 'active' : ''}`} onClick={() => setActiveTab('local')}>Kompyuterdan yuklash</button>
-                <button className={`studio-tab ${activeTab === 'yts' ? 'active' : ''}`} onClick={() => setActiveTab('yts')}>Internetdan qidirish (API)</button>
+                <button className={`studio-tab ${activeTab === 'yts' ? 'active' : ''}`} onClick={() => setActiveTab('yts')}>🎬 TMDB dan qidirish</button>
             </div>
 
             {activeTab === 'local' && (
@@ -224,10 +220,10 @@ export default function StudioPage() {
                                     <img src={movie.poster} alt={movie.title} className="yts-poster" />
                                     <div className="yts-info">
                                         <h4>{movie.title} ({movie.year})</h4>
-                                        <p>✨ Rating: {movie.rating}</p>
+                                        <p>⭐ {movie.rating} · {movie.year}</p>
                                         <div className="yts-actions">
                                             <button className="btn btn-publish" onClick={() => handleYtsImport(movie)}>
-                                                Tezla'ga ko'chirish
+                                                Tezla'ga import qilish
                                             </button>
                                         </div>
                                     </div>
