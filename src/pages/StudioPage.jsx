@@ -22,6 +22,13 @@ export default function StudioPage() {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [dragOver, setDragOver] = useState(false);
+    
+    // YTS API states
+    const [activeTab, setActiveTab] = useState('local'); // 'local' or 'yts'
+    const [ytsQuery, setYtsQuery] = useState('');
+    const [ytsResults, setYtsResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    
     const fileInputRef = useRef(null);
 
     /* ---------- data fetching ---------- */
@@ -86,6 +93,48 @@ export default function StudioPage() {
         } catch (err) { alert('Xato: ' + err.message); }
     };
 
+    /* ---------- YTS Search & Import ---------- */
+    const handleYtsSearch = async (e) => {
+        e.preventDefault();
+        if (!ytsQuery) return;
+        setIsSearching(true);
+        try {
+            const res = await fetch(`${API_URL}/api/yts/search?q=${encodeURIComponent(ytsQuery)}`);
+            if (!res.ok) throw new Error('Qidiruvda xatolik yuz berdi');
+            const data = await res.json();
+            setYtsResults(data.results || []);
+        } catch (err) {
+            alert('Xato: ' + err.message);
+        }
+        setIsSearching(false);
+    };
+
+    const handleYtsImport = async (movie) => {
+        // Find best torrent (1080p -> 720p)
+        const torrent = movie.torrents?.find(t => t.quality === '1080p') || movie.torrents?.[0];
+        if (!torrent) {
+            return alert("Fayl topilmadi!");
+        }
+        
+        try {
+            const res = await fetch(`${API_URL}/api/yts/download`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: movie.title,
+                    torrent_url: torrent.url
+                })
+            });
+            if (!res.ok) throw new Error("Yuklash boshlanmadi");
+            setYtsResults([]);
+            setYtsQuery('');
+            setActiveTab('local');
+            fetchProjects();
+        } catch(err) {
+            alert("Xato: " + err.message);
+        }
+    };
+
     /* ---------- render ---------- */
     return (
         <div className="studio-page">
@@ -110,41 +159,84 @@ export default function StudioPage() {
                 </div>
             </div>
 
-            {/* Upload Zone */}
-            <div
-                className={`studio-upload-zone ${dragOver ? 'drag-active' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={e => { e.preventDefault(); setDragOver(false); handleFileDrop(e.dataTransfer.files[0]); }}
-                onClick={() => !uploading && fileInputRef.current?.click()}
-            >
-                <input
-                    ref={fileInputRef} type="file" accept="video/*"
-                    style={{ display: 'none' }}
-                    onChange={e => e.target.files[0] && handleFileDrop(e.target.files[0])}
-                />
-
-                {uploading ? (
-                    <div className="upload-progress-state">
-                        <div className="upload-spinner" />
-                        <p style={{ color: '#aaa' }}>
-                            {uploadProgress < 60 ? 'Video yuklanmoqda...' : 'AI Opus qayta ishlash boshlanmoqda...'}
-                        </p>
-                        <div className="progress-track" style={{ maxWidth: 320, width: '100%' }}>
-                            <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className="upload-icon-wrap">
-                            <Upload size={32} color="#818cf8" />
-                        </div>
-                        <h2>Video faylni shu yerga tashlang</h2>
-                        <p className="upload-hint">yoki bosing va fayl tanlang</p>
-                        <p className="upload-formats">MP4, MKV, AVI, MOV · Maks 4 GB</p>
-                    </>
-                )}
+            {/* Upload / YTS Tabs */}
+            <div className="studio-tabs">
+                <button className={`studio-tab ${activeTab === 'local' ? 'active' : ''}`} onClick={() => setActiveTab('local')}>Kompyuterdan yuklash</button>
+                <button className={`studio-tab ${activeTab === 'yts' ? 'active' : ''}`} onClick={() => setActiveTab('yts')}>Internetdan qidirish (API)</button>
             </div>
+
+            {activeTab === 'local' && (
+                <div
+                    className={`studio-upload-zone ${dragOver ? 'drag-active' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); handleFileDrop(e.dataTransfer.files[0]); }}
+                    onClick={() => !uploading && fileInputRef.current?.click()}
+                >
+                    <input
+                        ref={fileInputRef} type="file" accept="video/*"
+                        style={{ display: 'none' }}
+                        onChange={e => e.target.files[0] && handleFileDrop(e.target.files[0])}
+                    />
+
+                    {uploading ? (
+                        <div className="upload-progress-state">
+                            <div className="upload-spinner" />
+                            <p style={{ color: '#aaa' }}>
+                                {uploadProgress < 60 ? 'Video yuklanmoqda...' : 'AI Opus qayta ishlash boshlanmoqda...'}
+                            </p>
+                            <div className="progress-track" style={{ maxWidth: 320, width: '100%' }}>
+                                <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="upload-icon-wrap">
+                                <Upload size={32} color="#818cf8" />
+                            </div>
+                            <h2>Video faylni shu yerga tashlang</h2>
+                            <p className="upload-hint">yoki bosing va kompyuterdan tanlang</p>
+                            <p className="upload-formats">MP4, MKV, AVI, MOV · Maks 4 GB</p>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'yts' && (
+                <div className="yts-zone">
+                    <form className="yts-search-form" onSubmit={handleYtsSearch}>
+                        <input 
+                            type="text" 
+                            className="yts-input" 
+                            placeholder="Film nomini yozing (masalan: Inception)..."
+                            value={ytsQuery}
+                            onChange={(e) => setYtsQuery(e.target.value)}
+                        />
+                        <button type="submit" className="btn btn-primary" disabled={isSearching}>
+                            {isSearching ? <RefreshCw className="spin" size={18} /> : 'Qidirish'}
+                        </button>
+                    </form>
+
+                    {ytsResults.length > 0 && (
+                        <div className="yts-results">
+                            {ytsResults.map(movie => (
+                                <div key={movie.id} className="yts-card">
+                                    <img src={movie.poster} alt={movie.title} className="yts-poster" />
+                                    <div className="yts-info">
+                                        <h4>{movie.title} ({movie.year})</h4>
+                                        <p>✨ Rating: {movie.rating}</p>
+                                        <div className="yts-actions">
+                                            <button className="btn btn-publish" onClick={() => handleYtsImport(movie)}>
+                                                Tezla'ga ko'chirish
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Pipeline Steps */}
             <div className="studio-pipeline">

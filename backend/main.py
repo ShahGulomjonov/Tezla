@@ -10,6 +10,7 @@ from config import settings
 from models import Project
 from typing import List, Optional
 import tmdb
+import yts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tezla")
@@ -339,6 +340,76 @@ async def tmdb_import_movie(tmdb_id: int):
 
     logger.info(f"TMDB import: {project_id} - {project.title} ({len(chapters)} chapters, ~{condensed_min} min read)")
     return {"message": "Import successful", "project": project}
+
+# ==================== YTS / WebTorrent Endpoints ====================
+
+@app.get("/api/yts/search")
+async def yts_search_api(q: str = Query(..., min_length=1)):
+    """Search for movies on YTS."""
+    try:
+        movies = yts.search_movies(q)
+        return {"results": movies}
+    except Exception as e:
+        logger.error(f"YTS search error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+@app.post("/api/yts/download")
+async def yts_download_api(request: Request, background_tasks: BackgroundTasks):
+    """Start downloading a movie from a YTS torrent/magnet."""
+    data = await request.json()
+    torrent_url = data.get("torrent_url")
+    title = data.get("title", "Unknown YTS Movie")
+    
+    if not torrent_url:
+        raise HTTPException(status_code=400, detail="Missing torrent URL")
+        
+    project_id = f"yts-{uuid.uuid4().hex[:6]}"
+    dest_dir = os.path.join(settings.UPLOAD_DIR, project_id)
+    
+    # Create an initial pending project
+    project = Project(
+        id=project_id,
+        title=title,
+        status="downloading",
+        runtime="00:00",
+        runtimeSeconds=0
+    )
+    DB_PROJECTS[project_id] = project
+    
+    # Run the download in the background
+    async def bg_download_and_process():
+        try:
+            logger.info(f"Starting background torrent download for {title}")
+            await yts.download_torrent(torrent_url, dest_dir)
+            logger.info(f"Torrent download complete for {title}. Proceeding to pipeline.")
+            
+            # Find the downloaded video file
+            video_extensions = ['.mp4', '.mkv', '.avi']
+            downloaded_file = None
+            for root, dirs, files in os.walk(dest_dir):
+                for file in files:
+                    if any(file.endswith(ext) for ext in video_extensions):
+                        downloaded_file = os.path.join(root, file)
+                        break
+                if downloaded_file: break
+                
+            if not downloaded_file:
+                raise Exception("No video file found in downloaded torrent.")
+                
+            # Update project with actual file and run AI pipeline
+            project.original_file = downloaded_file
+            project.status = "uploaded"
+            
+            from pipeline.orchestrator import run_pipeline
+            run_pipeline(project)
+            
+        except Exception as e:
+            logger.error(f"YTS Download/Process failed mapping: {e}")
+            project.status = "error"
+            
+    background_tasks.add_task(bg_download_and_process)
+    return {"message": "Download started", "project": project}
+
 
 if __name__ == "__main__":
     import uvicorn
