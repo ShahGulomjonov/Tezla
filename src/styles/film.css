@@ -1,0 +1,441 @@
+/* film.css — Cinematic Video Player + Full Responsive */
+
+.film-page {
+    width: 100%;
+    min-height: 100vh;
+    background: #0a0a0a;
+    color: white;
+    overflow-x: hidden;
+}
+
+.film-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    height: 100vh;
+    background: #0a0a0a;
+    color: #888;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: var(--color-accent);
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Back Button */
+.back-btn {
+    position: fixed;
+    top: 1.25rem;
+    left: 1.5rem;
+    z-index: 100;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.back-btn:hover {
+    background: white;
+    color: black;
+    transform: scale(1.1);
+}
+
+/* Player Section — sticky at top */
+.player-section {
+    width: 100%;
+    background: #000;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.main-video {
+    width: 100%;
+    max-height: 70vh;
+    display: block;
+    background: #000;
+    outline: none;
+}
+
+.player-placeholder {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.placeholder-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 3rem 4rem;
+    border-radius: 16px;
+}
+
+.placeholder-inner h2 { font-size: 1.4rem; margin: 0; }
+.placeholder-inner p { color: #888; margin: 0; }
+
+/* Film Details Section */
+.film-details {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 3rem;
+    padding: 2rem 4rem;
+}
+
+.film-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.2;
+}
+
+.film-meta-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #888;
+}
+
+.genre-chip {
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.confidence-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #eab308;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Film Action Buttons (Netflix-style) */
+.film-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.btn-film-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 2rem;
+    background: white;
+    color: black;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.btn-film-play:hover {
+    transform: scale(1.04);
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
+}
+
+.btn-film-action {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-film-action:hover {
+    border-color: white;
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
+}
+
+.btn-film-action.active {
+    border-color: #22c55e;
+    color: #22c55e;
+}
+
+.btn-film-action .rotated {
+    transform: rotate(45deg);
+}
+
+/* Overview & Cast */
+.film-overview {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: #bbb;
+    max-width: 650px;
+    margin-bottom: 1rem;
+}
+
+.film-cast {
+    color: #888;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.film-cast span {
+    color: #aaa;
+    font-weight: 600;
+}
+
+/* Stats */
+.stats-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid #1a1a1a;
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+    text-align: center;
+    min-width: 85px;
+}
+
+.stat-card.accent { border-color: rgba(99, 102, 241, 0.3); }
+.stat-card.accent .stat-value { color: #6366f1; }
+.stat-card.success .stat-value { color: #22c55e; }
+
+.stat-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-accent);
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.2rem;
+}
+
+/* Scene Breakdown */
+.scene-breakdown {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #1a1a1a;
+    border-radius: 12px;
+    padding: 1.25rem;
+    align-self: flex-start;
+    position: sticky;
+    top: calc(70vh + 1rem);
+    max-height: calc(100vh - 70vh - 3rem);
+    overflow-y: auto;
+}
+
+.scene-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.scene-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: none;
+    color: white;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+}
+
+.scene-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #222;
+}
+
+.scene-item.active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.scene-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.scene-item.active .scene-num {
+    background: var(--color-accent);
+}
+
+.scene-body { flex: 1; min-width: 0; }
+.scene-label { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene-time-row { display: flex; align-items: center; gap: 0.3rem; color: #555; font-size: 0.75rem; margin-top: 0.1rem; }
+
+/* Similar Films Section */
+.similar-section {
+    padding: 2rem 4rem 3rem;
+    border-top: 1px solid #1a1a1a;
+}
+
+.similar-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+}
+
+.similar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.similar-card {
+    text-decoration: none;
+    color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #111;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.similar-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.similar-thumb {
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: #1a1a1a;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.similar-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.similar-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
+.similar-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.similar-card:hover .similar-play { opacity: 1; }
+
+.similar-info { padding: 0.6rem; }
+.similar-name { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.similar-meta { font-size: 0.7rem; color: #666; margin: 0; }
+
+/* Progress bars */
+.progress-bar-track { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 3px; background: var(--color-accent); transition: width 0.5s ease; }
+.progress-bar-fill.processing { background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ===== RESPONSIVE ===== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .film-details { padding: 1.5rem 2rem; gap: 2rem; }
+    .similar-section { padding: 1.5rem 2rem 2rem; }
+    .film-title { font-size: 1.8rem; }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .player-section { position: relative; }
+    .main-video { max-height: 35vh; }
+    .player-placeholder { max-height: 35vh; }
+    .placeholder-inner { padding: 1.5rem 2rem; }
+
+    .film-details {
+        grid-template-columns: 1fr;
+        padding: 1.25rem;
+        gap: 1.5rem;
+    }
+
+    .film-title { font-size: 1.5rem; }
+    .film-overview { font-size: 0.9rem; line-height: 1.6; }
+
+    .film-actions { gap: 0.5rem; }
+    .btn-film-play { padding: 0.6rem 1.5rem; font-size: 0.9rem; }
+    .btn-film-action { width: 38px; height: 38px; }
+
+    .stats-row { gap: 0.5rem; }
+    .stat-card { padding: 0.7rem 0.8rem; min-width: 70px; }
+    .stat-value { font-size: 1rem; }
+
+    .scene-breakdown { position: static; max-height: none; }
+    .similar-section { padding: 1.25rem; }
+    .similar-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; }
+
+    .back-btn { top: 0.75rem; left: 0.75rem; width: 38px; height: 38px; }
+}
+
+@media (max-width: 480px) {
+    .film-details { padding: 1rem; }
+    .film-title { font-size: 1.3rem; }
+    .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); }
+    .similar-grid { grid-template-columns: repeat(3, 1fr); }
+    .film-actions { flex-wrap: wrap; }
+}
