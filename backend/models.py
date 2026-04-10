@@ -14,7 +14,7 @@ class Project(BaseModel):
     rating: Any = "Unrated"  # Can be str ("PG-13") or float (8.5 from TMDB)
     language: str = "Unknown"
     year: int = 2024
-    status: Literal['uploaded', 'processing', 'ready', 'exported', 'error'] = 'uploaded'
+    status: Literal['downloading', 'uploaded', 'processing', 'ready', 'exported', 'error'] = 'uploaded'
     progress: float = 0.0
     confidence: float = 0.0
     thumbnailGradient: str = "linear-gradient(135deg, #1a1a3e 0%, #2d1b4e 30%, #1a2d4e 70%, #0f1a2e 100%)"

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Film, Cpu, AlertTriangle, CheckCircle, Clock, Play, Users, Shield, Trash2, Plus, X, BarChart3 } from 'lucide-react';
+import { Upload, Film, Cpu, AlertTriangle, CheckCircle, Clock, Play, Users, Shield, Trash2, Plus, X, BarChart3, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../styles/admin.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const STATUS_CONFIG = {
+    downloading:{ label: 'Yuklab olish...',    color: '#3b82f6', icon: Download, pulse: true },
     uploaded:   { label: 'Yuklangan',         color: '#888',    icon: Clock },
     processing: { label: 'AI Qayta ishlash...', color: '#f59e0b', icon: Cpu, pulse: true },
     ready:      { label: 'Tayyor',            color: '#22c55e', icon: CheckCircle },

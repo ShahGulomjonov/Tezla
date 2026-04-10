@@ -97,6 +97,52 @@
 .placeholder-inner h2 { font-size: 1.4rem; margin: 0; }
 .placeholder-inner p { color: #888; margin: 0; }
 
+/* Pulse icon animation */
+@keyframes pulse-glow {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+.pulse-icon { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Film Progress Bar */
+.film-progress-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.film-progress-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.film-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+.film-progress-fill.downloading {
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+}
+
+.film-progress-fill.processing {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+}
+
+.film-progress-label {
+    color: #888;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
 /* Film Details Section */
 .film-details {
     display: grid;

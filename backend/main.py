@@ -244,8 +244,8 @@ async def tmdb_movie_detail(tmdb_id: int):
         raise HTTPException(status_code=502, detail=str(e))
 
 @app.post("/api/tmdb/import/{tmdb_id}")
-async def tmdb_import_movie(tmdb_id: int):
-    """Import a TMDB movie as a Tezla project with AI narrative condensation."""
+async def tmdb_import_movie(tmdb_id: int, background_tasks: BackgroundTasks):
+    """Import a TMDB movie: fetch metadata, search Rutor for torrent, download, and run AI pipeline."""
     if not settings.TMDB_API_KEY:
         raise HTTPException(status_code=500, detail="TMDB API key not configured")
 
@@ -263,69 +263,18 @@ async def tmdb_import_movie(tmdb_id: int):
 
     project_id = f"tmdb-{tmdb_id}"
     runtime_sec = project_data["runtimeSeconds"]
-    runtime_min = runtime_sec // 60
 
-    # Generate AI narrative condensation
-    from pipeline.condensation import generate_condensation
-    genres = [g.strip() for g in project_data["genre"].split(",")]
-    all_videos = project_data.get("all_videos", [])
-
-    logger.info(f"Generating AI condensation for: {project_data['title']} ({len(all_videos)} videos available)")
-    chapters = generate_condensation(
-        title=project_data["title"],
-        overview=project_data["overview"],
-        genres=genres,
-        cast=project_data["cast"],
-        runtime_min=runtime_min,
-        videos=all_videos,
-    )
-    logger.info(f"Generated {len(chapters)} chapters for {project_data['title']}")
-
-    # Also generate scene breakdown from chapters
-    scenes = []
-    for i, ch in enumerate(chapters):
-        position = i / max(len(chapters) - 1, 1)
-        importance = 0.9 if ch.get("phase") in ("climax", "beginning") else 0.7 if ch.get("phase") == "resolution" else 0.5
-        scenes.append({
-            "id": ch["id"],
-            "start_sec": ch.get("start_min", 0) * 60,
-            "end_sec": ch.get("end_min", 2) * 60,
-            "status": "keep",
-            "importance": importance,
-            "confidence": 0.92,
-            "narrativePhase": "beginning" if ch.get("phase") == "beginning" else "end" if ch.get("phase") == "resolution" else "middle",
-            "label": ch["title"],
-            "rationale": ch.get("description", "")[:100] + "...",
-            "characters": project_data["cast"][:2] if project_data["cast"] else ["Lead Character"],
-            "emotions": ch.get("emotions", ["neutral"]),
-            "transcript": "",
-            "segments": [],
-        })
-
-    # Calculate total reading time
-    total_reading = settings.TARGET_BUDGET_SECONDS / 60.0
-    condensed_min = int(total_reading)
-    condensed_str = f"{condensed_min:02d}:00"
-
-    # Metrics
-    avg_conf = 0.92
-    compression = round((1 - total_reading / max(runtime_min, 1)) * 100, 1)
-
+    # Create project with 'downloading' status
     project = Project(
         id=project_id,
         title=project_data["title"],
         runtime=project_data["runtime"],
         runtimeSeconds=runtime_sec,
-        condensedDuration=condensed_str,
-        condensedSeconds=condensed_min * 60,
         year=project_data["year"],
         genre=project_data["genre"],
-        status="ready",
-        progress=100,
-        confidence=round(avg_conf * 100, 1),
-        narrativeRetention=88.5,
-        compressionRatio=compression,
-        scenes=scenes,
+        status="downloading",
+        progress=0,
+        scenes=[],
         poster_url=project_data["poster_url"],
         backdrop_url=project_data["backdrop_url"],
         youtube_trailer_key=project_data["youtube_trailer_key"],
@@ -333,13 +282,220 @@ async def tmdb_import_movie(tmdb_id: int):
         cast=project_data["cast"],
         tmdb_id=tmdb_id,
         vote_average=project_data["vote_average"],
-        condensation=chapters,
-        all_videos=all_videos,
     )
     DB_PROJECTS[project_id] = project
 
-    logger.info(f"TMDB import: {project_id} - {project.title} ({len(chapters)} chapters, ~{condensed_min} min read)")
-    return {"message": "Import successful", "project": project}
+    # Background: search Rutor -> download torrent -> run AI pipeline
+    background_tasks.add_task(_bg_download_and_process, project, project_id, project_data["title"], project_data.get("year"))
+
+    logger.info(f"TMDB import started: {project_id} - {project.title}")
+    return {"message": "Import started — downloading from Rutor.info", "project": project}
+
+
+# ==================== Shared Torrent Download Helper ====================
+
+def _run_torrent_download(project, project_id: str, magnet: str, dest_dir: str) -> str | None:
+    """
+    Download a torrent using webtorrent, track progress via file size monitoring.
+    Returns the path to the downloaded video file, or None on failure.
+    
+    NOTE: We do NOT parse webtorrent's stdout for progress — it buffers/disables
+    progress bars when stdout is piped (non-TTY). Instead, we monitor the 
+    download directory for growing files.
+    """
+    import subprocess
+    import time
+    import threading
+
+    os.makedirs(dest_dir, exist_ok=True)
+
+    logger.info(f"[{project_id}] Starting webtorrent download...")
+    cmd = f'webtorrent download "{magnet}" --out "{dest_dir}"'
+
+    # Run webtorrent in a thread so we can monitor file sizes concurrently
+    process_result = {"returncode": None, "finished": False}
+
+    def run_webtorrent():
+        try:
+            result = subprocess.run(
+                cmd, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=7200,  # 2 hour max
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            process_result["returncode"] = result.returncode
+        except subprocess.TimeoutExpired:
+            logger.error(f"[{project_id}] Webtorrent timed out (2h)")
+            process_result["returncode"] = -1
+        except Exception as e:
+            logger.error(f"[{project_id}] Webtorrent error: {e}")
+            process_result["returncode"] = -1
+        finally:
+            process_result["finished"] = True
+
+    dl_thread = threading.Thread(target=run_webtorrent, daemon=True)
+    dl_thread.start()
+
+    # Monitor download progress by watching file sizes in dest_dir
+    stall_timeout = 600  # 10 minutes without growth = stalled
+    last_total_size = 0
+    last_growth_time = time.time()
+    poll_interval = 3  # Check every 3 seconds
+
+    while not process_result["finished"]:
+        time.sleep(poll_interval)
+
+        # Calculate total size of all files in dest_dir
+        total_size = 0
+        for root, dirs, files in os.walk(dest_dir):
+            for f in files:
+                try:
+                    total_size += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+
+        if total_size > last_total_size:
+            last_total_size = total_size
+            last_growth_time = time.time()
+
+            # Estimate progress: assume movie is roughly 1-4 GB
+            # Map file size growth to 10-70% project progress
+            size_mb = total_size / (1024 * 1024)
+            # Rough estimate: 700MB file = ~50%, 1.5GB = ~70%
+            estimated_pct = min(70, int(10 + (size_mb / 20)))
+            project.progress = estimated_pct
+
+            if int(size_mb) % 100 == 0 and size_mb > 0:
+                logger.info(f"[{project_id}] Downloaded: {size_mb:.0f} MB")
+        else:
+            # Check stall — no file growth
+            stall_duration = time.time() - last_growth_time
+            if stall_duration > stall_timeout and last_total_size > 0:
+                logger.warning(f"[{project_id}] Download stalled for {stall_timeout}s. Aborting.")
+                project.status = "error"
+                project.progress = 0
+                return None
+
+    dl_thread.join(timeout=10)
+
+    exit_code = process_result["returncode"]
+    logger.info(f"[{project_id}] Webtorrent finished (exit code: {exit_code})")
+
+    project.progress = 72
+
+    # Find the largest video file
+    video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v']
+    downloaded_file = None
+    largest_size = 0
+    for root, dirs, files in os.walk(dest_dir):
+        for file in files:
+            fpath = os.path.join(root, file)
+            if any(file.lower().endswith(ext) for ext in video_extensions):
+                try:
+                    fsize = os.path.getsize(fpath)
+                    if fsize > largest_size:
+                        largest_size = fsize
+                        downloaded_file = fpath
+                except OSError:
+                    pass
+
+    if not downloaded_file:
+        logger.error(f"[{project_id}] No video file found after download")
+        project.status = "error"
+        project.progress = 0
+        return None
+
+    # Validate file size
+    file_size_mb = largest_size / (1024 * 1024)
+    if file_size_mb < 50:
+        logger.error(f"[{project_id}] File too small: {file_size_mb:.1f}MB. Likely incomplete.")
+        project.status = "error"
+        project.progress = 0
+        return None
+
+    logger.info(f"[{project_id}] Video downloaded: {downloaded_file} ({file_size_mb:.0f} MB)")
+    return downloaded_file
+
+
+def _bg_download_and_process(project, project_id: str, title: str, year=None):
+    """Background task: search Rutor -> download -> AI pipeline."""
+    import rutor
+    from pipeline.orchestrator import run_pipeline
+
+    try:
+        logger.info(f"[{project_id}] Searching Rutor for: {title} ({year})")
+        project.progress = 5
+        torrent = rutor.find_best_movie_torrent(title, year)
+
+        if not torrent:
+            logger.error(f"[{project_id}] No torrent found on Rutor")
+            project.status = "error"
+            project.progress = 0
+            return
+
+        logger.info(f"[{project_id}] Found: {torrent['title'][:60]} ({torrent['size']})")
+        project.progress = 8
+
+        dest_dir = os.path.join(settings.UPLOAD_DIR, project_id)
+        downloaded_file = _run_torrent_download(project, project_id, torrent["magnet"], dest_dir)
+
+        if not downloaded_file:
+            return  # Status already set to error inside helper
+
+        project.original_file = downloaded_file
+        project.status = "processing"
+        project.progress = 75
+        run_pipeline(project)
+
+    except Exception as e:
+        logger.error(f"[{project_id}] Download/Process failed: {e}")
+        import traceback
+        traceback.print_exc()
+        project.status = "error"
+        project.progress = 0
+
+
+@app.post("/api/tmdb/retry/{project_id}")
+async def tmdb_retry_project(project_id: str, background_tasks: BackgroundTasks):
+    """Retry downloading and processing a failed TMDB project from scratch."""
+    if project_id not in DB_PROJECTS:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project = DB_PROJECTS[project_id]
+    if project.status not in ("error", "ready"):
+        raise HTTPException(status_code=400, detail=f"Cannot retry '{project.status}' state")
+
+    # Clean old files
+    import shutil
+    for f in [
+        os.path.join(settings.OUTPUT_DIR, f"{project_id}_condensed.mp4"),
+        os.path.join(settings.OUTPUT_DIR, f"{project_id}_condensed.srt"),
+    ]:
+        if os.path.exists(f):
+            try: os.remove(f)
+            except: pass
+
+    dest_dir = os.path.join(settings.UPLOAD_DIR, project_id)
+    if os.path.exists(dest_dir):
+        try: shutil.rmtree(dest_dir, ignore_errors=True)
+        except: pass
+
+    # Reset project state
+    project.status = "downloading"
+    project.progress = 0
+    project.original_file = ""
+    project.output_file = ""
+    project.scenes = []
+    project.condensedDuration = ""
+    project.condensedSeconds = 0
+    project.compressionRatio = 0
+
+    background_tasks.add_task(
+        _bg_download_and_process,
+        project, project_id,
+        project.title, getattr(project, 'year', None)
+    )
+    return {"message": "Retry started", "project": project}
 
 # ==================== YTS / WebTorrent Endpoints ====================
 

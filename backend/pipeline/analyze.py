@@ -315,6 +315,7 @@ def score_scenes(project_id: str, scenes: list[dict], film_duration: float):
 
 def pareto_mock_scoring(scenes: list[dict], film_duration: float = 0):
     total = film_duration if film_duration > 0 else (scenes[-1]['end_sec'] if scenes else 60)
+    target_budget = settings.TARGET_BUDGET_SECONDS
 
     labels = [
         "Opening", "Introduction", "Setup", "Transition", "Development",
@@ -331,7 +332,6 @@ def pareto_mock_scoring(scenes: list[dict], film_duration: float = 0):
         trivial = _is_trivial_many(transcript, has_dialogue, duration)
 
         # --- Pareto base importance from narrative position ---
-        # Fallback scoring: hit the 25-minute mark (~1500 sec)
         if position < 0.08:
             base = 0.95 if vital else (0.60 if trivial else 0.80)
         elif position < 0.20:
@@ -378,8 +378,31 @@ def pareto_mock_scoring(scenes: list[dict], film_duration: float = 0):
         scene['emotions'] = _infer_emotions(position, has_dialogue, transcript)
         scene['confidence'] = 0.78 if has_dialogue else 0.58
         scene['dialogue_complete'] = True
+        scene['status'] = 'cut'  # Default to cut, will be selected below
 
-    return _apply_pareto_rules(scenes, total)
+    # Apply Pareto rules (adjusts importance for opening, climax, credits)
+    scenes = _apply_pareto_rules(scenes, total)
+
+    # =====================================================================
+    # CRITICAL: Pre-select scenes up to target budget based on importance
+    # Sort by importance descending and greedily fill the budget
+    # =====================================================================
+    sorted_by_importance = sorted(scenes, key=lambda x: x.get('importance', 0), reverse=True)
+    total_used = 0.0
+    for scene in sorted_by_importance:
+        dur = scene['end_sec'] - scene['start_sec']
+        if dur < 0.5:
+            continue
+        if total_used + dur <= target_budget + 120:  # Allow slight overshoot (2 min grace)
+            scene['status'] = 'keep'
+            total_used += dur
+        else:
+            scene['status'] = 'cut'
+
+    kept_count = len([s for s in scenes if s.get('status') == 'keep'])
+    print(f"[mock] Pre-selected {kept_count} scenes, {total_used:.0f}s (target {target_budget}s)")
+
+    return scenes
 
 
 # ---------------------------------------------------------------------------

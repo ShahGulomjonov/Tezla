@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Upload, Film, Cpu, Play, Clock, CheckCircle,
-    AlertTriangle, Zap, Scissors, Send, RefreshCw
+    AlertTriangle, Zap, Scissors, Send, RefreshCw, Download
 } from 'lucide-react';
 import '../styles/studio.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const STATUS_MAP = {
+    downloading:{ label: 'Yuklab olish...', color: '#3b82f6', Icon: Download },
     uploaded:   { label: 'Yuklangan',           color: '#888',    Icon: Clock },
     processing: { label: 'AI qayta ishlash...',  color: '#f59e0b', Icon: Cpu },
     ready:      { label: 'Tayyor',               color: '#22c55e', Icon: CheckCircle },
@@ -81,6 +82,21 @@ export default function StudioPage() {
         try {
             const res = await fetch(`${API_URL}/api/projects/${id}/process`, { method: 'POST' });
             if (!res.ok) throw new Error('AI qayta ishlash boshlanmadi');
+            fetchProjects();
+        } catch (err) { alert('Xato: ' + err.message); }
+    };
+
+    const handleRetry = async (project) => {
+        try {
+            // For TMDB-imported projects, use the retry endpoint that re-downloads
+            if (project.id.startsWith('tmdb-')) {
+                const res = await fetch(`${API_URL}/api/tmdb/retry/${project.id}`, { method: 'POST' });
+                if (!res.ok) throw new Error('Qayta yuklash boshlanmadi');
+            } else {
+                // For local uploads, just re-process
+                const res = await fetch(`${API_URL}/api/projects/${project.id}/process`, { method: 'POST' });
+                if (!res.ok) throw new Error('AI qayta ishlash boshlanmadi');
+            }
             fetchProjects();
         } catch (err) { alert('Xato: ' + err.message); }
     };
@@ -264,6 +280,7 @@ export default function StudioPage() {
                         {projects.map(project => {
                             const st = STATUS_MAP[project.status] || STATUS_MAP.uploaded;
                             const isProcessing = project.status === 'processing';
+                            const isDownloading = project.status === 'downloading';
                             return (
                                 <div key={project.id} className="studio-project-card">
                                     {/* Card Header */}
@@ -297,15 +314,17 @@ export default function StudioPage() {
                                             )}
                                         </div>
 
-                                        {/* Progress bar for processing */}
-                                        {isProcessing && (
+                                        {/* Progress bar for processing/downloading */}
+                                        {(isProcessing || isDownloading) && (
                                             <div className="project-progress">
                                                 <div className="progress-track">
-                                                    <div className="progress-fill processing"
+                                                    <div className={`progress-fill ${project.status}`}
                                                          style={{ width: `${project.progress || 5}%` }} />
                                                 </div>
                                                 <div className="progress-label">
-                                                    Opus AI tahlil qilmoqda... {project.progress || 0}%
+                                                    {isDownloading 
+                                                        ? `Yuklab olinmoqda... ${project.progress || 0}%` 
+                                                        : `Opus AI tahlil qilmoqda... ${project.progress || 0}%`}
                                                 </div>
                                             </div>
                                         )}
@@ -333,8 +352,8 @@ export default function StudioPage() {
                                                 </button>
                                             )}
                                             {project.status === 'error' && (
-                                                <button className="btn btn-retry" onClick={() => handleProcess(project.id)}>
-                                                    <RefreshCw size={14} /> Qayta urinish
+                                                <button className="btn btn-retry" onClick={() => handleRetry(project)}>
+                                                    <RefreshCw size={14} /> Qayta yuklash
                                                 </button>
                                             )}
                                         </div>

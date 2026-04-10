@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Play, Clock, Film, Star, Scissors, ChevronRight, RefreshCw, Share2, Plus, ThumbsUp } from 'lucide-react';
+import { ArrowLeft, Play, Clock, Film, Star, Scissors, ChevronRight, RefreshCw, Share2, Plus, ThumbsUp, Download, Cpu } from 'lucide-react';
 import '../styles/film.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -35,12 +35,12 @@ export default function FilmPage() {
         fetch(`${API_URL}/api/projects`)
             .then(r => r.json())
             .then(data => setAllProjects(data.filter(p => p.id !== id && (p.status === 'ready' || p.status === 'exported'))))
-            .catch(() => {});
+            .catch(() => { });
     }, [id]);
 
     useEffect(() => {
         if (!project) return;
-        if (project.status === 'processing') {
+        if (project.status === 'downloading' || project.status === 'processing') {
             const interval = setInterval(fetchProject, 3000);
             return () => clearInterval(interval);
         }
@@ -79,6 +79,8 @@ export default function FilmPage() {
 
     const keptScenes = project?.scenes?.filter(s => s.status === 'keep') || [];
     const isReady = project?.status === 'ready' || project?.status === 'exported';
+    const isDownloading = project?.status === 'downloading';
+    const isProcessing = project?.status === 'processing';
     const videoUrl = isReady ? `${API_URL}/api/projects/${id}/video?t=${videoKey}` : null;
 
     const retryVideo = () => { setVideoError(false); setVideoKey(prev => prev + 1); };
@@ -133,6 +135,57 @@ export default function FilmPage() {
                             </button>
                         </div>
                     </div>
+                ) : (isDownloading || isProcessing) ? (
+                    <div className="player-placeholder" style={{
+                        background: project.backdrop_url
+                            ? `linear-gradient(to bottom, rgba(0,0,0,0.7), #0a0a0a), url(${project.backdrop_url}) center/cover`
+                            : project.poster_url
+                                ? `linear-gradient(to bottom, rgba(0,0,0,0.7), #0a0a0a), url(${project.poster_url}) center/cover`
+                                : 'linear-gradient(135deg, #111, #1a1a2e)'
+                    }}>
+                        <div className="placeholder-inner">
+                            {isDownloading ? (
+                                <Download size={48} color="#3b82f6" className="pulse-icon" />
+                            ) : (
+                                <Cpu size={48} color="#f59e0b" className="pulse-icon" />
+                            )}
+                            <h2>{isDownloading ? 'Yuklab olinmoqda...' : 'AI tahlil qilmoqda...'}</h2>
+                            <p style={{ color: '#888', marginTop: '0.5rem' }}>
+                                {isDownloading ? 'Rutor.info dan film yuklanmoqda' : 'Opus AI filmni zichlab tayyorlamoqda'}
+                            </p>
+                            <div className="film-progress-bar" style={{ marginTop: '1.5rem', width: '80%', maxWidth: '400px' }}>
+                                <div className="film-progress-track">
+                                    <div className={`film-progress-fill ${isDownloading ? 'downloading' : 'processing'}`}
+                                         style={{ width: `${project.progress || 2}%` }} />
+                                </div>
+                                <span className="film-progress-label">{project.progress || 0}%</span>
+                            </div>
+                        </div>
+                    </div>
+                ) : project.status === 'error' ? (
+                    <div className="player-placeholder" style={{
+                        background: project.backdrop_url
+                            ? `linear-gradient(to bottom, rgba(0,0,0,0.8), #0a0a0a), url(${project.backdrop_url}) center/cover`
+                            : 'linear-gradient(135deg, #111, #1a1a2e)'
+                    }}>
+                        <div className="placeholder-inner">
+                            <Film size={48} color="#ef4444" />
+                            <h2>Yuklashda xatolik</h2>
+                            <p style={{ color: '#888', marginTop: '0.5rem' }}>Torrent yuklab olishda muammo yuz berdi</p>
+                            <button onClick={async () => {
+                                try {
+                                    if (id.startsWith('tmdb-')) {
+                                        await fetch(`${API_URL}/api/tmdb/retry/${id}`, { method: 'POST' });
+                                    } else {
+                                        await fetch(`${API_URL}/api/projects/${id}/process`, { method: 'POST' });
+                                    }
+                                    fetchProject();
+                                } catch (e) { console.error(e); }
+                            }} className="btn btn-accent" style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <RefreshCw size={15} /> Qayta yuklash
+                            </button>
+                        </div>
+                    </div>
                 ) : (
                     <div className="player-placeholder" style={{
                         background: project.backdrop_url
@@ -175,7 +228,7 @@ export default function FilmPage() {
                             <Plus size={18} className={inMyList ? 'rotated' : ''} />
                             {inMyList ? 'Ro\'yxatda' : 'Ro\'yxatga'}
                         </button>
-                        <button className="btn-film-action" onClick={() => {}}>
+                        <button className="btn-film-action" onClick={() => { }}>
                             <ThumbsUp size={18} />
                         </button>
                         <button className="btn-film-action" onClick={handleShare}>
